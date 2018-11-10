@@ -41,6 +41,7 @@ CREATE TABLE `assets` (
   `MAC` varchar(50) DEFAULT NULL,
   `Nickname` varchar(100) DEFAULT NULL,
   `Notify` tinyint(1) NOT NULL DEFAULT '0',
+  `Log` tinyint(1) NOT NULL DEFAULT '0',
   `FirstSeen` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
   `LastSeen` timestamp NOT NULL DEFAULT '0000-00-00 00:00:00',
   `TimesSeen` int(11) NOT NULL DEFAULT '0',
@@ -154,15 +155,13 @@ DELIMITER ;
 /*!50003 SET sql_mode              = 'NO_AUTO_CREATE_USER,NO_ENGINE_SUBSTITUTION' */ ;
 DELIMITER ;;
 CREATE DEFINER=`root`@`localhost` PROCEDURE `InsertMac`(IN NewMac VARCHAR(100), IN NewDB VARCHAR(100), IN NewSSID VARCHAR(100))
-BEGIN 
-INSERT INTO log(MAC, decibel, SSID) VALUES(NewMac, NewDB, NewSSID); 
-
-IF NOT EXISTS (SELECT * FROM SSIDs WHERE MAC = NewMac AND SSID = NewSSID) THEN
-
-    INSERT INTO SSIDs (MAC, SSID) VALUES(NewMac, NewSSID);
-
+BEGIN
+IF NOT EXISTS (SELECT * FROM assets WHERE MAC = NewMac AND Ignore = 1) THEN
+   INSERT INTO log(MAC, decibel, SSID) VALUES(NewMac, NewDB, NewSSID); 
 END IF;
-
+IF NOT EXISTS (SELECT * FROM SSIDs WHERE MAC = NewMac AND SSID = NewSSID) THEN
+    INSERT INTO SSIDs (MAC, SSID) VALUES(NewMac, NewSSID);
+END IF;
 END ;;
 DELIMITER ;
 /*!50003 SET sql_mode              = @saved_sql_mode */ ;
@@ -181,17 +180,14 @@ DELIMITER ;
 DELIMITER ;;
 CREATE DEFINER=`root`@`localhost` PROCEDURE `NotificationLogic`()
 BEGIN
-
 IF  EXISTS (SELECT DISTINCT Nickname,LastSeen,MAC,SignalStrength FROM assets ass WHERE Notify = 1 AND LastSeen > DATE_SUB(now(), INTERVAL 5 MINUTE) AND MinutesSince > 60 AND SignalStrength >= DBTreshold AND NotifiedRecently = 0) THEN
 	SELECT DISTINCT Nickname,LastSeen,MAC,SignalStrength FROM assets ass WHERE Notify = 1 AND LastSeen > DATE_SUB(now(), INTERVAL 5 MINUTE) AND MinutesSince > 60 AND SignalStrength >= DBTreshold AND NotifiedRecently = 0;
 	UPDATE assets SET NotifiedRecently = 1 WHERE Notify = 1 AND LastSeen > DATE_SUB(now(), INTERVAL 5 MINUTE) AND MinutesSince > 60 AND SignalStrength >= DBTreshold AND NotifiedRecently = 0;
 END IF;
-
 IF  EXISTS (SELECT * FROM config WHERE Name = 'NotifyNewlyDiscovered' AND Value = 'true') THEN
     SELECT DISTINCT Nickname,LastSeen,MAC,SignalStrength FROM assets ass WHERE FirstSeen > DATE_SUB(now(), INTERVAL 5 MINUTE) AND SignalStrength >= DBTreshold AND NotifiedRecently = 0;
 	UPDATE assets SET NotifiedRecently = 1 WHERE FirstSeen > DATE_SUB(now(), INTERVAL 5 MINUTE) AND SignalStrength >= DBTreshold AND NotifiedRecently = 0;
 END IF;
-
 END ;;
 DELIMITER ;
 /*!50003 SET sql_mode              = @saved_sql_mode */ ;
@@ -210,7 +206,7 @@ DELIMITER ;
 DELIMITER ;;
 CREATE DEFINER=`root`@`localhost` PROCEDURE `PurgeLogs`()
 BEGIN
-TRUNCATE TABLE log;
+SELECT 'TRUNCATE TABLE log';
 END ;;
 DELIMITER ;
 /*!50003 SET sql_mode              = @saved_sql_mode */ ;
